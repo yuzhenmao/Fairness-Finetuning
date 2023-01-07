@@ -48,9 +48,16 @@ def ae_constraint(criterion, log_softmax, y, a):
 
 
 def mmf_constraint(criterion, log_softmax, y, a):
-    loss_p = criterion(log_softmax[a == 1], y[a == 1])
-    loss_n = criterion(log_softmax[a == 0], y[a == 0])
-    return torch.max(loss_p, loss_n)
+    # loss_p = criterion(log_softmax[a == 1], y[a == 1])
+    # loss_n = criterion(log_softmax[a == 0], y[a == 0])
+    # return torch.max(loss_p, loss_n)
+    y_p_a = y + a
+    y_m_a = y - a
+    loss_1 = criterion(log_softmax[y_p_a == 2], y[y_p_a == 2])  # (1, 1)
+    loss_2 = criterion(log_softmax[y_p_a == 0], y[y_p_a == 0])  # (0, 0)
+    loss_3 = criterion(log_softmax[y_m_a == 1], y[y_m_a == 1])  # (1, 0)
+    loss_4 = criterion(log_softmax[y_m_a == -1], y[y_m_a == -1])  # (0, 1)
+    return torch.max(torch.max(loss_1, loss_2), torch.max(loss_3, loss_4))
 
 
 def disparity_impact_difference(y, pred, sensitive_features):
@@ -79,11 +86,18 @@ def accuracy_equality_ratio(y, pred, sensitive_features):
 
 
 def max_min_fairness(y, pred, sensitive_features):
-    classification_rate_p = sum(y[sensitive_features == 1] == pred[sensitive_features == 1]) / sum(
-        sensitive_features == 1)
-    classification_rate_n = sum(y[sensitive_features == 0] == pred[sensitive_features == 0]) / sum(
-        sensitive_features == 0)
-    return min(classification_rate_p, classification_rate_n)
+    # classification_rate_p = sum(y[sensitive_features == 1] == pred[sensitive_features == 1]) / sum(
+    #     sensitive_features == 1)
+    # classification_rate_n = sum(y[sensitive_features == 0] == pred[sensitive_features == 0]) / sum(
+    #     sensitive_features == 0)
+    # return min(classification_rate_p, classification_rate_n)
+    y_p_a = y + sensitive_features
+    y_m_a = y - sensitive_features
+    classification_rate_1 = sum(y[y_p_a == 2] == pred[y_p_a == 2]) / sum(y_p_a == 2)
+    classification_rate_2 = sum(y[y_p_a == 0] == pred[y_p_a == 0]) / sum(y_p_a == 0)
+    classification_rate_3 = sum(y[y_m_a == 1] == pred[y_m_a == 1]) / sum(y_m_a == 1)
+    classification_rate_4 = sum(y[y_m_a == -1] == pred[y_m_a == -1]) / sum(y_m_a == -1)
+    return min(min(classification_rate_1, classification_rate_2), min(classification_rate_3, classification_rate_4))
 
 
 def print_fpr_fnr_sensitive_features(y_true, y_pred, x_control, sensitive_attrs):
