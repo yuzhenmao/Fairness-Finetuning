@@ -254,11 +254,11 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
         else:
             trigger_times = 0
 
-        if epoch_loss < best_loss and epoch > 20:
-            best_model = deepcopy(model)
-            best_loss = epoch_loss
+    #     if epoch_loss < best_loss and epoch > 20:
+    #         best_model = deepcopy(model)
+    #         best_loss = epoch_loss
 
-    model = best_model
+    # model = best_model
 
     model.eval()
 
