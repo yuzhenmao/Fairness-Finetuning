@@ -200,6 +200,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
 
     losses = []
     trigger_times = 0
+    best_loss = 1e9
     for epoch in range(1, args.ft_epoch + 1):
         epoch_loss = 0.0
         epoch_loss_fairness = 0.0
@@ -209,11 +210,9 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
             optimizer.zero_grad()
             outputs = model.out_fc(x)
             log_softmax, softmax = F.log_softmax(outputs, dim=1), F.softmax(outputs, dim=1)
-            loss_1 = criterion(log_softmax, y)
             if method == 'M1' or method == 'M2':  # Use the fairness constraint
                 if args.constraint == 'MMF':
                     loss = mmf_constraint(criterion, log_softmax, y, a)
-                    epoch_loss_fairness += loss.item()
                 else:
                     if args.constraint == 'EO':
                         fpr, fnr = eo_constraint(softmax[:, 1], y, a)
@@ -224,17 +223,16 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
                         loss_fairness = di_constraint(softmax[:, 1], a)
                     elif args.constraint == 'AE':
                         loss_fairness = ae_constraint(criterion, log_softmax, y, a)
-                    epoch_loss += loss_1.item()
                     epoch_loss_fairness += loss_fairness.item()
+                    loss_1 = criterion(log_softmax, y)
                     loss = loss_1 + args.alpha * loss_fairness
             else:
-                loss = loss_1
-                epoch_loss += loss_1.item()
+                loss = criterion(log_softmax, y)
+            
+            epoch_loss += loss.item()
 
             loss.backward(retain_graph=True)
             optimizer.step()
-
-            losses.append(loss.item())
 
             _, preds = torch.max(outputs.data, 1)
             epoch_acc += torch.sum(preds == y).item()
@@ -244,6 +242,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
         epoch_loss /= len(finetuneloader)
         epoch_loss_fairness /= len(finetuneloader)
         epoch_acc /= len(finetune_dataset)
+        losses.append(epoch_loss)
         print('FINETUNE Epoch %d/%d   Loss_1: %.4f   Loss_2: %.4f   Accuracy: %.4f' % (
             epoch, args.ft_epoch, epoch_loss, epoch_loss_fairness, epoch_acc))
 
@@ -254,6 +253,12 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
                 break
         else:
             trigger_times = 0
+
+        if epoch_loss < best_loss and epoch > 20:
+            best_model = deepcopy(model)
+            best_loss = epoch_loss
+
+    model = best_model
 
     model.eval()
 
