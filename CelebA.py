@@ -192,7 +192,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
     model.append_last_layer()
     model = model.to(device)
     optimizer = optim.SGD(model.out_fc.parameters(), lr=args.ft_lr, momentum=0.9, weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5, last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.5, last_epoch=-1)
     finetune_dataset = TensorDataset(x_finetune, y_finetune, a_finetune)
     # For B3 and M2, considering balance, only tried full batch
     finetuneloader = torch.utils.data.DataLoader(finetune_dataset, batch_size=6300, shuffle=True)
