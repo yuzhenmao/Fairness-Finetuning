@@ -31,4 +31,3 @@ python CelebA.py  --method M2  --alpha 5  --constraint EO  --seed 2023
 ````
 - constraint: `EO`, `AE`, `DI`, `MMF`
 
-

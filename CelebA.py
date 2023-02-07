@@ -24,8 +24,6 @@ from fairlearn.metrics import (
     false_positive_rate_difference, false_negative_rate_difference,
     equalized_odds_difference)
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
-import matplotlib.pyplot as plt
-
 
 parser = argparse.ArgumentParser(description='fairness')
 parser.add_argument('--method', type=str, default='M2')
@@ -35,6 +33,7 @@ parser.add_argument('--alpha', type=float, default=2.)
 parser.add_argument('--constraint', type=str, default='EO')
 parser.add_argument('--seed', type=int, default=202212)
 parser.add_argument('--data_path', type=str, default='./')
+parser.add_argument('--batch_size', type=int, default=-1)
 parser.add_argument('--checkpoint', type=str, default=None)
 args = parser.parse_args()
 
@@ -192,10 +191,16 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
     model.append_last_layer()
     model = model.to(device)
     optimizer = optim.SGD(model.out_fc.parameters(), lr=args.ft_lr, momentum=0.9, weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.5, last_epoch=-1)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2000, gamma=0.1, last_epoch=-1)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.ft_epoch)
     finetune_dataset = TensorDataset(x_finetune, y_finetune, a_finetune)
     # For B3 and M2, considering balance, only tried full batch
-    finetuneloader = torch.utils.data.DataLoader(finetune_dataset, batch_size=6300, shuffle=True)
+    if args.batch_size < 0:
+        batch_size = y_finetune.shape[0]
+    else:
+        batch_size = args.batch_size
+    print(batch_size)
+    finetuneloader = torch.utils.data.DataLoader(finetune_dataset, batch_size=batch_size, shuffle=True)
     print(len(finetune_dataset))
 
     losses = []
@@ -228,7 +233,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
                     loss = loss_1 + args.alpha * loss_fairness
             else:
                 loss = criterion(log_softmax, y)
-            
+
             epoch_loss += loss.item()
 
             loss.backward(retain_graph=True)
@@ -237,7 +242,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
             _, preds = torch.max(outputs.data, 1)
             epoch_acc += torch.sum(preds == y).item()
 
-        scheduler.step()
+        # scheduler.step()
 
         epoch_loss /= len(finetuneloader)
         epoch_loss_fairness /= len(finetuneloader)
@@ -274,18 +279,19 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
             outs.append(out)
         outs = np.concatenate(outs)
         pred = np.argmax(outs, 1)
-        return pred
+        return outs[:, 1], pred
 
-    pred_train = get_pred(x_train)
-    pred_finetune = get_pred(x_finetune)
-    pred_test = get_pred(x_test)
+    out_train, pred_train = get_pred(x_train)
+    out_finetune, pred_finetune = get_pred(x_finetune)
+    out_test, pred_test = get_pred(x_test)
     sensitive_attrs = ['gender']
     y_train, y_finetune, y_test = y_train.numpy(), y_finetune.numpy(), y_test.numpy()
     a_train, a_finetune, a_test = a_train.numpy(), a_finetune.numpy(), a_test.numpy()
     a_train, a_finetune, a_test = {'gender': a_train}, {'gender': a_finetune}, {'gender': a_test}
 
     def train_test_classifier():
-        print_clf_stats(pred_train, pred_finetune, pred_test, y_train, a_train, y_finetune, a_finetune, y_test, a_test,
+        print_clf_stats(out_train, out_finetune, out_test, pred_train, pred_finetune, pred_test, y_train, a_train,
+                        y_finetune, a_finetune, y_test, a_test,
                         sensitive_attrs)
 
         finetune_eod = equalized_odds_difference(y_finetune, pred_finetune, sensitive_features=a_finetune)

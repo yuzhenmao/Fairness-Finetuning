@@ -25,8 +25,10 @@ def prepare_data(dataloader, model, device):
 
 
 def eo_constraint(p, y, a):
-    fpr = torch.abs(torch.sum(p * (1 - y) * a) / torch.sum(a) - torch.sum(p * (1 - y) * (1 - a)) / torch.sum(1 - a))
-    fnr = torch.abs(torch.sum((1 - p) * y * a) / torch.sum(a) - torch.sum((1 - p) * y * (1 - a)) / torch.sum(1 - a))
+    fpr = torch.abs(torch.sum(p * (1 - y) * a) / (torch.sum(a) + 1e-5) - torch.sum(p * (1 - y) * (1 - a)) / (
+                torch.sum(1 - a) + 1e-5))
+    fnr = torch.abs(torch.sum((1 - p) * y * a) / (torch.sum(a) + 1e-5) - torch.sum((1 - p) * y * (1 - a)) / (
+                torch.sum(1 - a) + 1e-5))
     return fpr, fnr
 
 
@@ -53,10 +55,22 @@ def mmf_constraint(criterion, log_softmax, y, a):
     # return torch.max(loss_p, loss_n)
     y_p_a = y + a
     y_m_a = y - a
-    loss_1 = criterion(log_softmax[y_p_a == 2], y[y_p_a == 2])  # (1, 1)
-    loss_2 = criterion(log_softmax[y_p_a == 0], y[y_p_a == 0])  # (0, 0)
-    loss_3 = criterion(log_softmax[y_m_a == 1], y[y_m_a == 1])  # (1, 0)
-    loss_4 = criterion(log_softmax[y_m_a == -1], y[y_m_a == -1])  # (0, 1)
+    if len(y[y_p_a == 2]) > 0:
+        loss_1 = criterion(log_softmax[y_p_a == 2], y[y_p_a == 2])  # (1, 1)
+    else:
+        loss_1 = torch.tensor(0.0).cuda()
+    if len(y[y_p_a == 0]) > 0:
+        loss_2 = criterion(log_softmax[y_p_a == 0], y[y_p_a == 0])  # (0, 0)
+    else:
+        loss_2 = torch.tensor(0.0).cuda()
+    if len(y[y_m_a == 1]) > 0:
+        loss_3 = criterion(log_softmax[y_m_a == 1], y[y_m_a == 1])  # (1, 0)
+    else:
+        loss_3 = torch.tensor(0.0).cuda()
+    if len(y[y_m_a == -1]) > 0:
+        loss_4 = criterion(log_softmax[y_m_a == -1], y[y_m_a == -1])  # (0, 1)
+    else:
+        loss_4 = torch.tensor(0.0).cuda()
     return torch.max(torch.max(loss_1, loss_2), torch.max(loss_3, loss_4))
 
 
@@ -130,14 +144,14 @@ def print_fpr_fnr_sensitive_features(y_true, y_pred, x_control, sensitive_attrs)
             print("||  %s  || %0.2f || %0.2f ||" % (s_val, fpr, fnr))
 
 
-def print_clf_stats(pred_train, pred_finetune, pred_test, y_train, a_train, y_finetune, a_finetune, y_test, a_test,
-                    sensitive_attrs):
+def print_clf_stats(out_train, out_finetune, out_test, pred_train, pred_finetune, pred_test, y_train, a_train,
+                    y_finetune, a_finetune, y_test, a_test, sensitive_attrs):
     train_acc, finetune_acc, test_acc = accuracy_score(y_train, pred_train), accuracy_score(y_finetune,
                                                                                             pred_finetune), accuracy_score(
         y_test, pred_test)
-    train_auc, finetune_auc, test_auc = roc_auc_score(y_train, pred_train), roc_auc_score(y_finetune,
-                                                                                          pred_finetune), roc_auc_score(
-        y_test, pred_test)
+    train_auc, finetune_auc, test_auc = roc_auc_score(y_train, out_train), roc_auc_score(y_finetune,
+                                                                                          out_finetune), roc_auc_score(
+        y_test, out_test)
 
     for s_attr in sensitive_attrs:
         print("*** Train ***")
