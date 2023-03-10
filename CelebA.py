@@ -275,7 +275,7 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
         loader = torch.utils.data.DataLoader(dataset, batch_size=TEST_BS, shuffle=False)
         outs = []
         for x in loader:
-            out = model.out_fc(x[0].to(device)).cpu().detach().numpy()
+            out = F.softmax(model.out_fc(x[0].to(device)), dim=1).cpu().detach().numpy()
             outs.append(out)
         outs = np.concatenate(outs)
         pred = np.argmax(outs, 1)
