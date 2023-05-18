@@ -203,6 +203,11 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
     finetuneloader = torch.utils.data.DataLoader(finetune_dataset, batch_size=batch_size, shuffle=True)
     print(len(finetune_dataset))
 
+    weights = (max(torch.bincount(y_finetune))/torch.bincount(y_finetune))
+    class_weights = torch.FloatTensor(weights).to(device)
+    print(torch.bincount(y_finetune))
+    print(class_weights)
+
     losses = []
     trigger_times = 0
     best_loss = 1e9
@@ -229,10 +234,10 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
                     elif args.constraint == 'AE':
                         loss_fairness = ae_constraint(criterion, log_softmax, y, a)
                     epoch_loss_fairness += loss_fairness.item()
-                    loss_1 = criterion(log_softmax, y)
+                    loss_1 = nn.NLLLoss(weight=class_weights)(log_softmax, y)
                     loss = loss_1 + args.alpha * loss_fairness
             else:
-                loss = criterion(log_softmax, y)
+                loss = nn.NLLLoss(weight=class_weights)(log_softmax, y)
 
             epoch_loss += loss.item()
 
@@ -293,6 +298,12 @@ def Finetune(model, criterion, trainloader, valloader, testloader):
         print_clf_stats(out_train, out_finetune, out_test, pred_train, pred_finetune, pred_test, y_train, a_train,
                         y_finetune, a_finetune, y_test, a_test,
                         sensitive_attrs)
+
+        valid_BACC = balanced_accuracy_score(y_finetune, pred_finetune)
+        print(f'Finetune weighted accuracy: {valid_BACC}')
+        
+        test_BACC = balanced_accuracy_score(y_test, pred_test)
+        print(f'Test weighted accuracy: {test_BACC}')
 
         finetune_eod = equalized_odds_difference(y_finetune, pred_finetune, sensitive_features=a_finetune)
         finetune_eor = equalized_odds_ratio(y_finetune, pred_finetune, sensitive_features=a_finetune)
